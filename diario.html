@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>~* M3u Bl0g - Timeline *~</title>
+    <style>
+        body { background-color: #000; color: #ff007f; font-family: Verdana, sans-serif; font-size: 12px; margin: 0; padding: 20px; background-image: url('https://files.catbox.moe/k3bx7z.gif'); }
+        #container { width: 800px; margin: 0 auto; background-color: #111; border: 2px dashed #ff007f; padding: 15px; position: relative; }
+        .top-nav { margin-bottom: 10px; font-family: "Courier New", monospace; font-size: 14px; font-weight: bold; }
+        .top-nav a { color: #888; text-decoration: none; }
+        .top-nav a:hover { color: #fff; text-shadow: 0 0 5px #ff007f; }
+        h1 { text-align: center; font-family: "Courier New", monospace; border-bottom: 1px solid #ff007f; padding-bottom: 10px; color: #fff; text-shadow: 2px 2px #ff007f; margin-top: 5px; }
+        .hidden { display: none !important; }
+        .post-form-container { background-color: #1a1a1a; border: 1px solid #ff007f; padding: 15px; margin-bottom: 30px; }
+        .post-form-container h3 { margin-top: 0; color: #fff; font-family: "Courier New", monospace; border-bottom: 1px dotted #555; padding-bottom: 5px; }
+        .input-group { display: flex; gap: 10px; margin-bottom: 10px; }
+        input[type="text"], input[type="date"], input[type="time"], textarea { background-color: #000; border: 1px solid #555; color: #fff; font-family: Verdana, sans-serif; font-size: 12px; padding: 5px; }
+        input[type="text"]:focus, input[type="date"]:focus, input[type="time"]:focus, textarea:focus { border-color: #ff007f; outline: none; }
+        .title-input { flex: 2; } .date-input { flex: 1; } .time-input { flex: 1; }
+        textarea { width: 100%; height: 80px; box-sizing: border-box; resize: vertical; margin-bottom: 10px; }
+        button { background-color: #000; color: #ff007f; border: 1px solid #ff007f; padding: 5px 15px; font-family: "Courier New", monospace; font-weight: bold; cursor: pointer; }
+        button:hover { background-color: #ff007f; color: #000; }
+        .cancel-btn { border-color: #555; color: #aaa; display: none; }
+        .cancel-btn:hover { background-color: #555; color: #fff; }
+        .timeline-post { background-color: #222; border-left: 3px solid #ff007f; padding: 10px 15px; margin-bottom: 15px; }
+        .post-header { display: flex; justify-content: space-between; border-bottom: 1px dotted #444; padding-bottom: 5px; margin-bottom: 10px; }
+        .post-title { color: #fff; font-weight: bold; font-size: 14px; }
+        .post-meta { font-size: 10px; color: #888; font-family: "Courier New", monospace; }
+        .post-content { color: #ccc; line-height: 1.5; white-space: pre-wrap; }
+        .post-actions { margin-top: 10px; border-top: 1px dotted #444; padding-top: 5px; text-align: right; }
+        .action-link { background: none; border: none; color: #777; font-family: "Courier New", monospace; font-size: 10px; cursor: pointer; padding: 0; margin-left: 10px; text-decoration: none; }
+        .action-link:hover { color: #ff007f; text-decoration: underline; }
+        .footer { text-align: center; margin-top: 30px; font-size: 10px; color: #444; }
+        .admin-link { color: #444; cursor: pointer; }
+        .admin-link:hover { color: #ff007f; }
+        #loadingStatus { text-align: center; color: #888; font-family: "Courier New", monospace; margin-bottom: 15px; }
+    </style>
+</head>
+<body>
+
+    <div id="container">
+        
+        <div class="top-nav">
+            <a href="index.html">[ &lt;&lt; Voltar para a Home ]</a>
+        </div>
+
+        <h1>xX Meu Cérebro Em Tempo Real Xx</h1>
+
+        <!-- Painel escondido de Admin -->
+        <div id="adminPanel" class="post-form-container hidden">
+            <h3 id="formTitle">> O que está consumindo sua mente agora? (Modo Admin)</h3>
+            <form id="postForm">
+                <div class="input-group">
+                    <input type="text" id="postTitle" class="title-input" placeholder="Título do pensamento..." required>
+                    <input type="date" id="postDate" class="date-input" required>
+                    <input type="time" id="postTime" class="time-input" required>
+                </div>
+                <textarea id="postContent" placeholder="Digite seu texto aqui..." required></textarea>
+                <button type="submit" id="submitBtn">[ TRANSMITIR PARA NUVEM ]</button>
+                <button type="button" id="cancelBtn" class="cancel-btn" onclick="window.cancelEdit()">[ CANCELAR ]</button>
+                <button type="button" onclick="window.logout()" style="float: right; border-color: #555; color: #555;">[ SAIR ]</button>
+            </form>
+        </div>
+
+        <div id="loadingStatus">[ Conectando ao Firebase... ]</div>
+        <div id="timeline"></div>
+        
+        <div class="footer">
+            ~*~ <span class="admin-link" onclick="window.tryLogin()">[ root access ]</span> ~*~
+        </div>
+    </div>
+
+    <!-- Firebase SDK (Importado via módulos) -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js";
+        import { getFirestore, collection, addDoc, onSnapshot, deleteDoc, doc, updateDoc, query, orderBy } 
+        from "https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js";
+
+        // =========================================================================
+        // INSIRA SUAS CREDENCIAIS DO FIREBASE ABAIXO
+        // =========================================================================
+        const firebaseConfig = {
+            apiKey: "AIzaSyC9lCVrGTTMA6eA9IZ9lX6Woh0XLtIwq6E",
+            authDomain: "blog-y2k.firebaseapp.com",
+            projectId: "blog-y2k",
+            storageBucket: "blog-y2k.firebasestorage.app",
+            messagingSenderId: "28134968749",
+            appId: "1:28134968749:web:5d7bcb421ff597870d2524",
+            measurementId: "G-2441CQC2Q4"
+          };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const postsCollection = collection(db, "y2k_posts");
+
+        let editingPostId = null;
+        let allPostsData = []; 
+        const ADMIN_PASSWORD = "scoria2026";
+
+        // --- LÓGICA DE INTERFACE E LOGIN ---
+        window.checkAdminStatus = function() {
+            const isAdmin = sessionStorage.getItem('isY2kAdmin') === 'true';
+            const adminPanel = document.getElementById('adminPanel');
+            
+            if (isAdmin) {
+                adminPanel.classList.remove('hidden');
+                setCurrentDateTime();
+            } else {
+                adminPanel.classList.add('hidden');
+            }
+            renderPostsUI(); 
+        }
+
+        window.tryLogin = function() {
+            if (sessionStorage.getItem('isY2kAdmin') === 'true') {
+                alert("Você já está logado como administrador!");
+                return;
+            }
+            const pwd = prompt("Terminal Restrito. Insira a senha root:");
+            if (pwd === ADMIN_PASSWORD) {
+                sessionStorage.setItem('isY2kAdmin', 'true');
+                window.checkAdminStatus();
+            } else if (pwd !== null) {
+                alert("Acesso Negado.");
+            }
+        }
+
+        window.logout = function() {
+            sessionStorage.removeItem('isY2kAdmin');
+            window.checkAdminStatus();
+        }
+
+        function setCurrentDateTime() {
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const day = String(now.getDate()).padStart(2, '0');
+            document.getElementById('postDate').value = `${year}-${month}-${day}`;
+            
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            document.getElementById('postTime').value = `${hours}:${minutes}`;
+        }
+
+        // --- COMUNICAÇÃO EM TEMPO REAL COM O FIREBASE ---
+        const q = query(postsCollection, orderBy("timestamp", "desc"));
+        onSnapshot(q, (snapshot) => {
+            document.getElementById('loadingStatus').style.display = 'none';
+            allPostsData = []; 
+            
+            snapshot.forEach((doc) => {
+                allPostsData.push({ id: doc.id, ...doc.data() });
+            });
+            
+            renderPostsUI();
+        });
+
+        function renderPostsUI() {
+            const timelineContainer = document.getElementById('timeline');
+            timelineContainer.innerHTML = ''; 
+            const isAdmin = sessionStorage.getItem('isY2kAdmin') === 'true';
+
+            if (allPostsData.length === 0) {
+                timelineContainer.innerHTML = '<p style="text-align:center; color:#555;">[ A timeline está vazia... ]</p>';
+                return;
+            }
+
+            allPostsData.forEach(post => {
+                const dateParts = post.date.split('-');
+                const formattedDate = `${dateParts[2]}-${dateParts[1]}-${dateParts[0]}`;
+
+                const postDiv = document.createElement('div');
+                postDiv.className = 'timeline-post';
+                
+                let postHTML = `
+                    <div class="post-header">
+                        <span class="post-title">${post.title}</span>
+                        <span class="post-meta">${formattedDate} // ${post.time}</span>
+                    </div>
+                    <div class="post-content">${post.content}</div>
+                `;
+
+                if (isAdmin) {
+                    postHTML += `
+                        <div class="post-actions">
+                            <button class="action-link" onclick="window.startEdit('${post.id}')">[ editar ]</button>
+                            <button class="action-link" onclick="window.deletePost('${post.id}')">[ deletar ]</button>
+                        </div>
+                    `;
+                }
+
+                postDiv.innerHTML = postHTML;
+                timelineContainer.appendChild(postDiv);
+            });
+        }
+
+        // --- AÇÕES DO BANCO DE DADOS ---
+        window.deletePost = async function(id) {
+            if(confirm("Tem certeza que deseja apagar esse registro do Firebase?")) {
+                try {
+                    await deleteDoc(doc(db, "y2k_posts", id));
+                    if(editingPostId === id) window.cancelEdit();
+                } catch (error) {
+                    alert("Erro ao deletar: " + error.message);
+                }
+            }
+        }
+
+        window.startEdit = function(id) {
+            const postToEdit = allPostsData.find(post => post.id === id);
+            if(postToEdit) {
+                editingPostId = id;
+                document.getElementById('postTitle').value = postToEdit.title;
+                document.getElementById('postDate').value = postToEdit.date;
+                document.getElementById('postTime').value = postToEdit.time;
+                document.getElementById('postContent').value = postToEdit.content;
+
+                document.getElementById('formTitle').innerText = '> Modificando registro no servidor...';
+                document.getElementById('submitBtn').innerText = '[ ATUALIZAR ]';
+                document.getElementById('cancelBtn').style.display = 'inline-block';
+                
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            }
+        }
+
+        window.cancelEdit = function() {
+            editingPostId = null;
+            document.getElementById('postForm').reset();
+            setCurrentDateTime();
+            
+            document.getElementById('formTitle').innerText = '> O que está consumindo sua mente agora? (Modo Admin)';
+            document.getElementById('submitBtn').innerText = '[ TRANSMITIR PARA NUVEM ]';
+            document.getElementById('cancelBtn').style.display = 'none';
+        }
+
+        document.getElementById('postForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const submitBtn = document.getElementById('submitBtn');
+            submitBtn.innerText = '[ PROCESSANDO... ]';
+            submitBtn.disabled = true;
+
+            const postData = {
+                title: document.getElementById('postTitle').value,
+                date: document.getElementById('postDate').value,
+                time: document.getElementById('postTime').value,
+                content: document.getElementById('postContent').value,
+                timestamp: Date.now() 
+            };
+
+            try {
+                if (editingPostId !== null) {
+                    await updateDoc(doc(db, "y2k_posts", editingPostId), postData);
+                    editingPostId = null;
+                } else {
+                    await addDoc(postsCollection, postData);
+                }
+                window.cancelEdit();
+            } catch (error) {
+                alert("Erro de conexão: Você não tem permissão para gravar ou a internet caiu. (" + error.message + ")");
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.innerText = '[ TRANSMITIR PARA NUVEM ]';
+            }
+        });
+
+        // Inicia a aplicação
+        window.checkAdminStatus();
+    </script>
+</body>
+</html>
