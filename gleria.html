@@ -35,7 +35,9 @@
         /* --- Estilos da Grade da Galeria --- */
         .gallery-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 15px; padding: 10px; background-color: #1a1a1a; border: 1px solid #333; }
         .gallery-item { position: relative; background-color: #000; border: 1px solid #444; padding: 5px; transition: all 0.3s ease; }
-        .gallery-item img { width: 100%; height: 200px; object-fit: cover; filter: grayscale(80%) contrast(1.2); transition: all 0.3s ease; }
+        
+        /* Cursor de "lupa" para indicar que a foto é clicável */
+        .gallery-item img { width: 100%; height: 200px; object-fit: cover; filter: grayscale(80%) contrast(1.2); transition: all 0.3s ease; cursor: zoom-in; }
         
         .gallery-item:hover { border-color: #ff007f; box-shadow: 0 0 10px #ff007f; transform: scale(1.02); z-index: 10; }
         .gallery-item:hover img { filter: grayscale(0%) contrast(1); }
@@ -45,6 +47,50 @@
 
         .delete-photo-btn { position: absolute; top: 10px; right: 10px; background-color: #000; border: 1px solid #ff0000; color: #ff0000; font-size: 10px; padding: 2px 5px; cursor: pointer; z-index: 20; }
         .delete-photo-btn:hover { background-color: #ff0000; color: #000; }
+
+        /* --- Estilos do Lightbox (Foto Expandida) --- */
+        #lightbox {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.9); /* Fundo bem escuro */
+            z-index: 9999; /* Garante que fique por cima de tudo */
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #lightbox img {
+            max-width: 90%;
+            max-height: 80%;
+            border: 2px solid #ff007f;
+            box-shadow: 0 0 20px #ff007f;
+        }
+
+        #lightbox-caption {
+            margin-top: 15px;
+            color: #fff;
+            font-family: "Courier New", monospace;
+            font-size: 14px;
+            text-shadow: 1px 1px 2px #ff007f;
+        }
+
+        .close-lightbox {
+            position: absolute;
+            top: 20px;
+            right: 30px;
+            color: #ff007f;
+            font-size: 30px;
+            font-family: "Courier New", monospace;
+            font-weight: bold;
+            cursor: pointer;
+            text-decoration: none;
+        }
+
+        .close-lightbox:hover { color: #fff; }
 
         .footer { text-align: center; margin-top: 30px; font-size: 10px; color: #444; }
         .admin-link { color: #444; cursor: pointer; }
@@ -60,7 +106,7 @@
             <a href="index.html">[ &lt;&lt; Voltar para a Home ]</a>
         </div>
 
-        <h1>xX Arquivos Visuais Xx</h1>
+        <h1>xX Galeria Insana Xx</h1>
         <p class="desc">> Fragmentos de mundos, rascunhos e loucuras...</p>
 
         <div id="adminPanel" class="post-form-container hidden">
@@ -85,11 +131,20 @@
         </div>
     </div>
 
+    <div id="lightbox" class="hidden" onclick="window.closeLightbox()">
+        <span class="close-lightbox">[ X ]</span>
+        <img id="lightbox-img" src="" alt="Imagem Expandida">
+        <div id="lightbox-caption"></div>
+    </div>
+
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js";
         import { getFirestore, collection, addDoc, onSnapshot, deleteDoc, doc, query, orderBy } 
         from "https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js";
 
+        // =========================================================================
+        // INSIRA SUAS CREDENCIAIS DO FIREBASE ABAIXO (AS MESMAS DA TIMELINE)
+        // =========================================================================
          const firebaseConfig = {
             apiKey: "AIzaSyC9lCVrGTTMA6eA9IZ9lX6Woh0XLtIwq6E",
             authDomain: "blog-y2k.firebaseapp.com",
@@ -97,7 +152,6 @@
             storageBucket: "blog-y2k.firebasestorage.app",
             messagingSenderId: "28134968749",
             appId: "1:28134968749:web:5d7bcb421ff597870d2524",
-            measurementId: "G-2441CQC2Q4"
           };
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
@@ -117,7 +171,7 @@
 
         window.tryLogin = function() {
             if (sessionStorage.getItem('isY2kAdmin') === 'true') return;
-            const pwd = prompt("Terminal Restrito:");
+            const pwd = prompt("Terminal Restrito. Insira a senha root:");
             if (pwd === ADMIN_PASSWORD) {
                 sessionStorage.setItem('isY2kAdmin', 'true');
                 window.checkAdminStatus();
@@ -127,6 +181,25 @@
         window.logout = function() {
             sessionStorage.removeItem('isY2kAdmin');
             window.checkAdminStatus();
+        }
+
+        // --- SISTEMA DE LIGHTBOX (FOTO EXPANDIDA) ---
+        window.openLightbox = function(imgSrc, caption) {
+            console.log('[DEBUG] openLightbox called with:', imgSrc); // Isso vai aparecer no F12 se funcionar
+            const lightbox = document.getElementById('lightbox');
+            const lightboxImg = document.getElementById('lightbox-img');
+            const lightboxCaption = document.getElementById('lightbox-caption');
+            
+            lightboxImg.src = imgSrc;
+            lightboxCaption.innerText = caption;
+            
+            lightbox.classList.remove('hidden');
+        }
+
+        window.closeLightbox = function() {
+            console.log('[DEBUG] closeLightbox called.'); // Isso vai aparecer no F12 se funcionar
+            const lightbox = document.getElementById('lightbox');
+            lightbox.classList.add('hidden');
         }
 
         // --- LEITURA DO BANCO ---
@@ -146,30 +219,35 @@
             const isAdmin = sessionStorage.getItem('isY2kAdmin') === 'true';
 
             if (allGalleryData.length === 0) {
-                gridContainer.innerHTML = '<p style="text-align:center; color:#555; grid-column: 1 / -1;">[ Banco vazio ]</p>';
+                gridContainer.innerHTML = '<p style="text-align:center; color:#555; grid-column: 1 / -1;">[ O banco visual está vazio... ]</p>';
                 return;
             }
 
             allGalleryData.forEach(item => {
                 const itemDiv = document.createElement('div');
                 itemDiv.className = 'gallery-item';
-                // A tag <img> aceita o texto Base64 no 'src' de forma nativa!
+                
+                // O ONCLICK foi movido e verificado para ser acionado apenas na imagem
+                // O ID do item agora é passado como string ''
                 itemDiv.innerHTML = `
-                    <img src="${item.url}" alt="${item.caption}">
+                    <img src="${item.url}" alt="${item.caption}" onclick="window.openLightbox('${item.url}', '${item.caption}')">
                     <div class="caption">${item.caption}</div>
-                    ${isAdmin ? `<button class="delete-photo-btn" onclick="window.deletePhoto('${item.id}')">[ X ]</button>` : ''}
+                    ${isAdmin ? `<button class="delete-photo-btn" onclick="window.deletePhoto('${item.id}', event)">[ X ]</button>` : ''}
                 `;
                 gridContainer.appendChild(itemDiv);
             });
         }
 
-        window.deletePhoto = async function(id) {
+        window.deletePhoto = async function(id, e) {
+            // Impede que o clique no botão [ X ] também expanda a imagem
+            if (e) e.stopPropagation(); 
+            
             if(confirm("Apagar imagem?")) {
                 await deleteDoc(doc(db, "y2k_gallery", id));
             }
         }
 
-        // --- O SEGREDO: CONVERSÃO PARA TEXTO (BASE64) ---
+        // --- CONVERSÃO PARA TEXTO (BASE64) ---
         document.getElementById('galleryForm').addEventListener('submit', function(e) {
             e.preventDefault();
             
@@ -188,15 +266,12 @@
             submitBtn.innerText = '[ CONVERTENDO E INJETANDO... ]';
             submitBtn.disabled = true;
 
-            // Instancia o leitor de arquivos do próprio navegador
             const reader = new FileReader();
             
-            // Quando terminar de ler a imagem como texto...
             reader.onloadend = async function() {
-                const base64String = reader.result; // Aqui está a imagem transformada em string
+                const base64String = reader.result;
 
                 try {
-                    // Envia o texto puro para a coleção do Firestore
                     await addDoc(galleryCollection, {
                         url: base64String,
                         caption: caption,
@@ -211,7 +286,6 @@
                 }
             };
 
-            // Dispara a leitura do arquivo
             reader.readAsDataURL(file);
         });
 
