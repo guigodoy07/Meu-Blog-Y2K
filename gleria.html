@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>~* M3u Bl0g - Galeria *~</title>
+    <style>
+        body { background-color: #000; color: #ff007f; font-family: Verdana, sans-serif; font-size: 12px; margin: 0; padding: 20px; background-image: url('https://files.catbox.moe/k3bx7z.gif'); }
+        #container { width: 800px; margin: 0 auto; background-color: #111; border: 2px dashed #ff007f; padding: 15px; position: relative; }
+        
+        .top-nav { margin-bottom: 10px; font-family: "Courier New", monospace; font-size: 14px; font-weight: bold; }
+        .top-nav a { color: #888; text-decoration: none; }
+        .top-nav a:hover { color: #fff; text-shadow: 0 0 5px #ff007f; }
+        
+        h1 { text-align: center; font-family: "Courier New", monospace; border-bottom: 1px solid #ff007f; padding-bottom: 10px; color: #fff; text-shadow: 2px 2px #ff007f; margin-top: 5px; }
+        .desc { text-align: center; color: #ccc; margin-bottom: 25px; font-family: "Courier New", monospace; }
+
+        .hidden { display: none !important; }
+
+        /* --- Estilos do Formulário (Admin) --- */
+        .post-form-container { background-color: #1a1a1a; border: 1px solid #ff007f; padding: 15px; margin-bottom: 30px; }
+        .post-form-container h3 { margin-top: 0; color: #fff; font-family: "Courier New", monospace; border-bottom: 1px dotted #555; padding-bottom: 5px; }
+        .input-group { display: flex; gap: 10px; margin-bottom: 10px; }
+        input[type="text"], input[type="url"] { background-color: #000; border: 1px solid #555; color: #fff; font-family: Verdana, sans-serif; font-size: 12px; padding: 5px; flex: 1; }
+        input:focus { border-color: #ff007f; outline: none; }
+        
+        button { background-color: #000; color: #ff007f; border: 1px solid #ff007f; padding: 5px 15px; font-family: "Courier New", monospace; font-weight: bold; cursor: pointer; }
+        button:hover { background-color: #ff007f; color: #000; }
+
+        /* --- Estilos da Grade da Galeria --- */
+        .gallery-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 15px; padding: 10px; background-color: #1a1a1a; border: 1px solid #333; }
+        .gallery-item { position: relative; background-color: #000; border: 1px solid #444; padding: 5px; transition: all 0.3s ease; }
+        .gallery-item img { width: 100%; height: 200px; object-fit: cover; filter: grayscale(80%) contrast(1.2); transition: all 0.3s ease; }
+        
+        .gallery-item:hover { border-color: #ff007f; box-shadow: 0 0 10px #ff007f; transform: scale(1.02); z-index: 10; }
+        .gallery-item:hover img { filter: grayscale(0%) contrast(1); }
+        
+        .caption { text-align: center; padding-top: 5px; font-size: 10px; color: #888; font-family: "Courier New", monospace; }
+        .gallery-item:hover .caption { color: #ff007f; }
+
+        /* Botão de Deletar Foto (Só para Admin) */
+        .delete-photo-btn { position: absolute; top: 10px; right: 10px; background-color: #000; border: 1px solid #ff0000; color: #ff0000; font-size: 10px; padding: 2px 5px; cursor: pointer; z-index: 20; }
+        .delete-photo-btn:hover { background-color: #ff0000; color: #000; }
+
+        /* --- Rodapé com Login --- */
+        .footer { text-align: center; margin-top: 30px; font-size: 10px; color: #444; }
+        .admin-link { color: #444; cursor: pointer; }
+        .admin-link:hover { color: #ff007f; }
+        #loadingStatus { text-align: center; color: #888; font-family: "Courier New", monospace; margin-bottom: 15px; }
+    </style>
+</head>
+<body>
+
+    <div id="container">
+        
+        <div class="top-nav">
+            <a href="index.html">[ &lt;&lt; Voltar para a Home ]</a>
+        </div>
+
+        <h1>xX Arquivos Visuais Xx</h1>
+        <p class="desc">> Fragmentos de mundos, rascunhos e loucuras...</p>
+
+        <div id="adminPanel" class="post-form-container hidden">
+            <h3 id="formTitle">> Adicionar Novo Fragmento Visual (Modo Admin)</h3>
+            <form id="galleryForm">
+                <div class="input-group">
+                    <input type="url" id="imgUrl" placeholder="Link direto da imagem (ex: Catbox, Imgur...)" required>
+                    <input type="text" id="imgCaption" placeholder="Legenda da arte..." required>
+                </div>
+                <button type="submit" id="submitBtn">[ TRANSMITIR PARA NUVEM ]</button>
+                <button type="button" onclick="window.logout()" style="float: right; border-color: #555; color: #555;">[ SAIR ]</button>
+            </form>
+        </div>
+
+        <div id="loadingStatus">[ Conectando ao Banco Visual... ]</div>
+        
+        <div class="gallery-grid" id="galleryGrid"></div>
+        
+        <div class="footer">
+            ~*~ <span class="admin-link" onclick="window.tryLogin()">[ root access ]</span> ~*~
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js";
+        import { getFirestore, collection, addDoc, onSnapshot, deleteDoc, doc, query, orderBy } 
+        from "https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js";
+
+        // =========================================================================
+        // INSIRA SUAS CREDENCIAIS DO FIREBASE ABAIXO (AS MESMAS DA TIMELINE)
+        // =========================================================================
+        const firebaseConfig = {
+            apiKey: "COLE_SUA_API_KEY_AQUI",
+            authDomain: "SEU_PROJETO.firebaseapp.com",
+            projectId: "SEU_PROJETO",
+            storageBucket: "SEU_PROJETO.appspot.com",
+            messagingSenderId: "SEUS_NUMEROS",
+            appId: "SEU_APP_ID"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        
+        // Criando uma coleção SEPARADA para não misturar com os textos
+        const galleryCollection = collection(db, "y2k_gallery");
+
+        let allGalleryData = []; 
+        const ADMIN_PASSWORD = "scoria2026";
+
+        // --- LÓGICA DE INTERFACE E LOGIN ---
+        window.checkAdminStatus = function() {
+            const isAdmin = sessionStorage.getItem('isY2kAdmin') === 'true';
+            const adminPanel = document.getElementById('adminPanel');
+            
+            if (isAdmin) {
+                adminPanel.classList.remove('hidden');
+            } else {
+                adminPanel.classList.add('hidden');
+            }
+            renderGalleryUI(); 
+        }
+
+        window.tryLogin = function() {
+            if (sessionStorage.getItem('isY2kAdmin') === 'true') {
+                alert("Você já está logado como administrador!");
+                return;
+            }
+            const pwd = prompt("Terminal Restrito. Insira a senha root:");
+            if (pwd === ADMIN_PASSWORD) {
+                sessionStorage.setItem('isY2kAdmin', 'true');
+                window.checkAdminStatus();
+            } else if (pwd !== null) {
+                alert("Acesso Negado.");
+            }
+        }
+
+        window.logout = function() {
+            sessionStorage.removeItem('isY2kAdmin');
+            window.checkAdminStatus();
+        }
+
+        // --- COMUNICAÇÃO EM TEMPO REAL COM O FIREBASE ---
+        const q = query(galleryCollection, orderBy("timestamp", "desc"));
+        onSnapshot(q, (snapshot) => {
+            document.getElementById('loadingStatus').style.display = 'none';
+            allGalleryData = []; 
+            
+            snapshot.forEach((doc) => {
+                allGalleryData.push({ id: doc.id, ...doc.data() });
+            });
+            
+            renderGalleryUI();
+        });
+
+        function renderGalleryUI() {
+            const gridContainer = document.getElementById('galleryGrid');
+            gridContainer.innerHTML = ''; 
+            const isAdmin = sessionStorage.getItem('isY2kAdmin') === 'true';
+
+            if (allGalleryData.length === 0) {
+                gridContainer.innerHTML = '<p style="text-align:center; color:#555; grid-column: 1 / -1;">[ O banco visual está vazio... ]</p>';
+                return;
+            }
+
+            allGalleryData.forEach(item => {
+                const itemDiv = document.createElement('div');
+                itemDiv.className = 'gallery-item';
+                
+                let itemHTML = `
+                    <img src="${item.url}" alt="${item.caption}">
+                    <div class="caption">${item.caption}</div>
+                `;
+
+                // Adiciona o botão de deletar apenas se for admin
+                if (isAdmin) {
+                    itemHTML += `
+                        <button class="delete-photo-btn" onclick="window.deletePhoto('${item.id}')">[ X ]</button>
+                    `;
+                }
+
+                itemDiv.innerHTML = itemHTML;
+                gridContainer.appendChild(itemDiv);
+            });
+        }
+
+        // --- AÇÕES DO BANCO DE DADOS ---
+        window.deletePhoto = async function(id) {
+            if(confirm("Tem certeza que deseja apagar essa imagem do Firebase?")) {
+                try {
+                    await deleteDoc(doc(db, "y2k_gallery", id));
+                } catch (error) {
+                    alert("Erro ao deletar: " + error.message);
+                }
+            }
+        }
+
+        document.getElementById('galleryForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const submitBtn = document.getElementById('submitBtn');
+            submitBtn.innerText = '[ PROCESSANDO... ]';
+            submitBtn.disabled = true;
+
+            const photoData = {
+                url: document.getElementById('imgUrl').value,
+                caption: document.getElementById('imgCaption').value,
+                timestamp: Date.now() 
+            };
+
+            try {
+                await addDoc(galleryCollection, photoData);
+                document.getElementById('galleryForm').reset();
+            } catch (error) {
+                alert("Erro de conexão: (" + error.message + ")");
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.innerText = '[ TRANSMITIR PARA NUVEM ]';
+            }
+        });
+
+        // Inicia a aplicação
+        window.checkAdminStatus();
+    </script>
+</body>
+</html>
