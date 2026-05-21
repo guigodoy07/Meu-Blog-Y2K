@@ -19,10 +19,16 @@
         /* --- Estilos do Formulário (Admin) --- */
         .post-form-container { background-color: #1a1a1a; border: 1px solid #ff007f; padding: 15px; margin-bottom: 30px; }
         .post-form-container h3 { margin-top: 0; color: #fff; font-family: "Courier New", monospace; border-bottom: 1px dotted #555; padding-bottom: 5px; }
-        .input-group { display: flex; gap: 10px; margin-bottom: 10px; }
-        input[type="text"], input[type="url"] { background-color: #000; border: 1px solid #555; color: #fff; font-family: Verdana, sans-serif; font-size: 12px; padding: 5px; flex: 1; }
-        input:focus { border-color: #ff007f; outline: none; }
         
+        .input-group { display: flex; flex-direction: column; gap: 10px; margin-bottom: 10px; }
+        input[type="text"] { background-color: #000; border: 1px solid #555; color: #fff; font-family: Verdana, sans-serif; font-size: 12px; padding: 5px; }
+        input:focus { border-color: #ff007f; outline: none; }
+
+        .file-input-group { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+        input[type="file"] { background: #000; border: 1px solid #555; color: #ff007f; font-family: "Courier New", monospace; font-size: 11px; padding: 5px; cursor: pointer; flex: 1; }
+        input[type="file"]::-webkit-file-upload-button { background: #000; border: 1px solid #ff007f; color: #ff007f; padding: 5px 10px; font-family: "Courier New", monospace; font-weight: bold; cursor: pointer; }
+        input[type="file"]::-webkit-file-upload-button:hover { background: #ff007f; color: #000; }
+
         button { background-color: #000; color: #ff007f; border: 1px solid #ff007f; padding: 5px 15px; font-family: "Courier New", monospace; font-weight: bold; cursor: pointer; }
         button:hover { background-color: #ff007f; color: #000; }
 
@@ -37,11 +43,9 @@
         .caption { text-align: center; padding-top: 5px; font-size: 10px; color: #888; font-family: "Courier New", monospace; }
         .gallery-item:hover .caption { color: #ff007f; }
 
-        /* Botão de Deletar Foto (Só para Admin) */
         .delete-photo-btn { position: absolute; top: 10px; right: 10px; background-color: #000; border: 1px solid #ff0000; color: #ff0000; font-size: 10px; padding: 2px 5px; cursor: pointer; z-index: 20; }
         .delete-photo-btn:hover { background-color: #ff0000; color: #000; }
 
-        /* --- Rodapé com Login --- */
         .footer { text-align: center; margin-top: 30px; font-size: 10px; color: #444; }
         .admin-link { color: #444; cursor: pointer; }
         .admin-link:hover { color: #ff007f; }
@@ -60,19 +64,20 @@
         <p class="desc">> Fragmentos de mundos, rascunhos e loucuras...</p>
 
         <div id="adminPanel" class="post-form-container hidden">
-            <h3 id="formTitle">> Adicionar Novo Fragmento Visual (Modo Admin)</h3>
+            <h3 id="formTitle">> Injetar Foto em Texto (Modo Admin - Limite 1MB)</h3>
             <form id="galleryForm">
                 <div class="input-group">
-                    <input type="url" id="imgUrl" placeholder="Link direto da imagem (ex: Catbox, Imgur...)" required>
+                    <div class="file-input-group">
+                        <input type="file" id="imgFile" accept="image/*" required>
+                    </div>
                     <input type="text" id="imgCaption" placeholder="Legenda da arte..." required>
                 </div>
-                <button type="submit" id="submitBtn">[ TRANSMITIR PARA NUVEM ]</button>
+                <button type="submit" id="submitBtn">[ TRANSMITIR PARA COLEÇÃO ]</button>
                 <button type="button" onclick="window.logout()" style="float: right; border-color: #555; color: #555;">[ SAIR ]</button>
             </form>
         </div>
 
         <div id="loadingStatus">[ Conectando ao Banco Visual... ]</div>
-        
         <div class="gallery-grid" id="galleryGrid"></div>
         
         <div class="footer">
@@ -85,52 +90,37 @@
         import { getFirestore, collection, addDoc, onSnapshot, deleteDoc, doc, query, orderBy } 
         from "https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js";
 
-        // =========================================================================
-        // INSIRA SUAS CREDENCIAIS DO FIREBASE ABAIXO (AS MESMAS DA TIMELINE)
-        // =========================================================================
-         const firebaseConfig = {
-            apiKey: "AIzaSyC9lCVrGTTMA6eA9IZ9lX6Woh0XLtIwq6E",
-            authDomain: "blog-y2k.firebaseapp.com",
-            projectId: "blog-y2k",
-            storageBucket: "blog-y2k.firebasestorage.app",
-            messagingSenderId: "28134968749",
-            appId: "1:28134968749:web:5d7bcb421ff597870d2524",
-            measurementId: "G-2441CQC2Q4"
-          };
+        const firebaseConfig = {
+            apiKey: "COLE_SUA_API_KEY_AQUI",
+            authDomain: "SEU_PROJETO.firebaseapp.com",
+            projectId: "SEU_PROJETO",
+            storageBucket: "SEU_PROJETO.firebasestorage.app",
+            messagingSenderId: "SEUS_NUMEROS",
+            appId: "SEU_APP_ID"
+        };
 
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
-        
-        // Criando uma coleção SEPARADA para não misturar com os textos
         const galleryCollection = collection(db, "y2k_gallery");
 
         let allGalleryData = []; 
         const ADMIN_PASSWORD = "scoria2026";
 
-        // --- LÓGICA DE INTERFACE E LOGIN ---
+        // --- INTERFACE E LOGIN ---
         window.checkAdminStatus = function() {
             const isAdmin = sessionStorage.getItem('isY2kAdmin') === 'true';
             const adminPanel = document.getElementById('adminPanel');
-            
-            if (isAdmin) {
-                adminPanel.classList.remove('hidden');
-            } else {
-                adminPanel.classList.add('hidden');
-            }
+            if (isAdmin) adminPanel.classList.remove('hidden');
+            else adminPanel.classList.add('hidden');
             renderGalleryUI(); 
         }
 
         window.tryLogin = function() {
-            if (sessionStorage.getItem('isY2kAdmin') === 'true') {
-                alert("Você já está logado como administrador!");
-                return;
-            }
-            const pwd = prompt("Terminal Restrito. Insira a senha root:");
+            if (sessionStorage.getItem('isY2kAdmin') === 'true') return;
+            const pwd = prompt("Terminal Restrito:");
             if (pwd === ADMIN_PASSWORD) {
                 sessionStorage.setItem('isY2kAdmin', 'true');
                 window.checkAdminStatus();
-            } else if (pwd !== null) {
-                alert("Acesso Negado.");
             }
         }
 
@@ -139,16 +129,14 @@
             window.checkAdminStatus();
         }
 
-        // --- COMUNICAÇÃO EM TEMPO REAL COM O FIREBASE ---
+        // --- LEITURA DO BANCO ---
         const q = query(galleryCollection, orderBy("timestamp", "desc"));
         onSnapshot(q, (snapshot) => {
             document.getElementById('loadingStatus').style.display = 'none';
             allGalleryData = []; 
-            
             snapshot.forEach((doc) => {
                 allGalleryData.push({ id: doc.id, ...doc.data() });
             });
-            
             renderGalleryUI();
         });
 
@@ -158,67 +146,75 @@
             const isAdmin = sessionStorage.getItem('isY2kAdmin') === 'true';
 
             if (allGalleryData.length === 0) {
-                gridContainer.innerHTML = '<p style="text-align:center; color:#555; grid-column: 1 / -1;">[ O banco visual está vazio... ]</p>';
+                gridContainer.innerHTML = '<p style="text-align:center; color:#555; grid-column: 1 / -1;">[ Banco vazio ]</p>';
                 return;
             }
 
             allGalleryData.forEach(item => {
                 const itemDiv = document.createElement('div');
                 itemDiv.className = 'gallery-item';
-                
-                let itemHTML = `
+                // A tag <img> aceita o texto Base64 no 'src' de forma nativa!
+                itemDiv.innerHTML = `
                     <img src="${item.url}" alt="${item.caption}">
                     <div class="caption">${item.caption}</div>
+                    ${isAdmin ? `<button class="delete-photo-btn" onclick="window.deletePhoto('${item.id}')">[ X ]</button>` : ''}
                 `;
-
-                // Adiciona o botão de deletar apenas se for admin
-                if (isAdmin) {
-                    itemHTML += `
-                        <button class="delete-photo-btn" onclick="window.deletePhoto('${item.id}')">[ X ]</button>
-                    `;
-                }
-
-                itemDiv.innerHTML = itemHTML;
                 gridContainer.appendChild(itemDiv);
             });
         }
 
-        // --- AÇÕES DO BANCO DE DADOS ---
         window.deletePhoto = async function(id) {
-            if(confirm("Tem certeza que deseja apagar essa imagem do Firebase?")) {
-                try {
-                    await deleteDoc(doc(db, "y2k_gallery", id));
-                } catch (error) {
-                    alert("Erro ao deletar: " + error.message);
-                }
+            if(confirm("Apagar imagem?")) {
+                await deleteDoc(doc(db, "y2k_gallery", id));
             }
         }
 
-        document.getElementById('galleryForm').addEventListener('submit', async function(e) {
+        // --- O SEGREDO: CONVERSÃO PARA TEXTO (BASE64) ---
+        document.getElementById('galleryForm').addEventListener('submit', function(e) {
             e.preventDefault();
             
             const submitBtn = document.getElementById('submitBtn');
-            submitBtn.innerText = '[ PROCESSANDO... ]';
+            const caption = document.getElementById('imgCaption').value;
+            const file = document.getElementById('imgFile').files[0];
+
+            if (!file) return;
+
+            // Alerta se o arquivo passar de 1MB antes de tentar enviar
+            if (file.size > 1048576) { 
+                alert("Erro: Este arquivo tem mais de 1MB. Reduza o tamanho ou mude para o Firebase Storage.");
+                return;
+            }
+
+            submitBtn.innerText = '[ CONVERTENDO E INJETANDO... ]';
             submitBtn.disabled = true;
 
-            const photoData = {
-                url: document.getElementById('imgUrl').value,
-                caption: document.getElementById('imgCaption').value,
-                timestamp: Date.now() 
+            // Instancia o leitor de arquivos do próprio navegador
+            const reader = new FileReader();
+            
+            // Quando terminar de ler a imagem como texto...
+            reader.onloadend = async function() {
+                const base64String = reader.result; // Aqui está a imagem transformada em string
+
+                try {
+                    // Envia o texto puro para a coleção do Firestore
+                    await addDoc(galleryCollection, {
+                        url: base64String,
+                        caption: caption,
+                        timestamp: Date.now()
+                    });
+                    document.getElementById('galleryForm').reset();
+                } catch (error) {
+                    alert("Erro no Firestore: " + error.message);
+                } finally {
+                    submitBtn.disabled = false;
+                    submitBtn.innerText = '[ TRANSMITIR PARA COLEÇÃO ]';
+                }
             };
 
-            try {
-                await addDoc(galleryCollection, photoData);
-                document.getElementById('galleryForm').reset();
-            } catch (error) {
-                alert("Erro de conexão: (" + error.message + ")");
-            } finally {
-                submitBtn.disabled = false;
-                submitBtn.innerText = '[ TRANSMITIR PARA NUVEM ]';
-            }
+            // Dispara a leitura do arquivo
+            reader.readAsDataURL(file);
         });
 
-        // Inicia a aplicação
         window.checkAdminStatus();
     </script>
 </body>
